@@ -17,6 +17,7 @@ class Pair(BaseModel):
 
 
 async def get_all_pairs():
+    # TODO: fix fake async function with real DB data
     pairs = [
         Pair(id=1, name="EURUSD", values=(PairValue.eur, PairValue.usd)),
         Pair(id=2, name="GBPJPY", values=(PairValue.gbp, PairValue.jpy)),
