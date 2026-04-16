@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
+
 class PairValue(str, Enum):
     usd = "USD"
     eur = "EUR"
