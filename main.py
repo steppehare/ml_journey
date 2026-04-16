@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 # from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
+
 app = FastAPI()
 
 class PairValue(str, Enum):
