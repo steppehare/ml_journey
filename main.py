@@ -1,14 +1,19 @@
-from enum import Enum
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
-from json import dumps
 
 
 app = FastAPI()
 
+class PairCreate(BaseModel):
+    name: str
+    date_time: str
+    open: float
+    high: float
+    low: float
+    close: float
 
 class Pair(BaseModel):
     id: int
@@ -39,7 +44,7 @@ async def get_pair(id: int) -> Pair | None:
 # -----[ Endpoints ]-----
 
 @app.get("/", status_code=200)
-async def get_pairs() -> list:
+async def get_pairs() -> list[Pair]:
     pairs = None
     async with sessionmaker() as session:
         result = await session.execute(text("SELECT * FROM historical_data"))
@@ -79,7 +84,7 @@ async def delete_pair(id: int) -> None:
         await session.commit()
 
 @app.post("/pair", status_code=201)
-async def create_pair(pair: Pair) -> str:
+async def create_pair(pair: PairCreate) -> str:
     print(f"Creating pair {pair.name}")
     async with sessionmaker() as session:
         await session.execute(text("INSERT INTO historical_data (name, date_time, open, high, low, close) VALUES (:name, :date_time, :open, :high, :low, :close)"), 
@@ -88,7 +93,7 @@ async def create_pair(pair: Pair) -> str:
     return f"Pair {pair.name} was created"
 
 @app.post("/pairs", status_code=201)
-async def create_pairs(pairs: list[Pair]) -> str:
+async def create_pairs(pairs: list[PairCreate]) -> str:
     async with sessionmaker() as session:
         for pair in pairs:
             await session.execute(text("INSERT INTO historical_data (name, date_time, open, high, low, close) VALUES (:name, :date_time, :open, :high, :low, :close)"), 
