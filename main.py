@@ -1,74 +1,97 @@
 from enum import Enum
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-# from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.pool import StaticPool
+from json import dumps
 
 
 app = FastAPI()
 
 
-class PairValue(str, Enum):
-    usd = "USD"
-    eur = "EUR"
-    gbp = "GBP"
-    jpy = "JPY"
-
 class Pair(BaseModel):
     id: int
     name: str
-    values: tuple[PairValue, PairValue]
+    date_time: str
+    open: float
+    high: float
+    low: float
+    close: float
 
-# engine = create_async_engine("sqlite+aiosqlite:///database.db")
-
-# async with async_sessionmaker(engine) as session:
-#     await session.execute("CREATE TABLE IF NOT EXISTS pairs (id INTEGER PRIMARY KEY, name TEXT, values TEXT)")
-#     await session.commit()
-
-
-async def get_all_pairs() -> list[Pair]:
-    # TODO: fix fake async function with real DB data
-    pairs = [
-        Pair(id=1, name="EURUSD", values=(PairValue.eur, PairValue.usd)),
-        Pair(id=2, name="GBPJPY", values=(PairValue.gbp, PairValue.jpy)),
-        Pair(id=3, name="USDJPY", values=(PairValue.usd, PairValue.jpy)),
-        Pair(id=4, name="USDGBP", values=(PairValue.usd, PairValue.gbp))
-    ]
-    return pairs
+engine = create_async_engine(
+    "sqlite+aiosqlite:///data.sqlite",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
+sessionmaker = async_sessionmaker(engine)
 
 async def get_pair(id: int) -> Pair | None:
-    # TODO: fix function to get all data from real DB
-    pairs = await get_all_pairs()
-    pair = None
-    for cur_pair in pairs:
-        if cur_pair.id == id:
-            pair = cur_pair
-    return pair
+    async with sessionmaker() as session:
+        result = await session.execute(text("SELECT * FROM historical_data WHERE id = :id"), {"id": id})
+        raw_pair = result.fetchone()
+        await session.commit()
+        if not raw_pair:
+            return None
+    return Pair(**raw_pair._asdict())
 
 
 # -----[ Endpoints ]-----
 
 @app.get("/", status_code=200)
 async def get_pairs() -> list:
-    return await get_all_pairs()
+    pairs = None
+    async with sessionmaker() as session:
+        result = await session.execute(text("SELECT * FROM historical_data"))
+        raw_pairs = result.fetchall()
+        await session.commit()
+        pairs = [Pair(**c_pair._asdict()) for c_pair in raw_pairs]
+        print(f"Pairs: {pairs}")
+    return pairs
 
-@app.get("/pairs/{id}", status_code=200)
+@app.get("/pair/{id}", status_code=200)
 async def get_pair_by_id(id: int) -> str:
     if id <= 0:
         raise HTTPException(status_code=400, detail="Id must be greater than 0")
     pair = await get_pair(id)
     if not pair:
         raise HTTPException(status_code=404, detail=f"Item not found by id {id}")
-    return f"Pair with id {id} was found"
+    return pair.model_dump_json()
 
-@app.put("/pairs/{id}", status_code=200)
-async def update_pair(id: int) -> str:
-    return f"Pair with id {id} was updated"
+@app.put("/pair", status_code=200)
+async def update_pair(pair: Pair) -> str:
+    async with sessionmaker() as session:
+        await session.execute(text("UPDATE historical_data SET name = :name, date_time = :date_time, open = :open, high = :high, low = :low, close = :close WHERE id = :id"),
+                              {"id": pair.id, "name": pair.name, "date_time": pair.date_time, "open": pair.open, "high": pair.high, "low": pair.low, "close": pair.close})
+        await session.commit()
+    return f"Pair with id {pair.id} was updated"
 
-@app.delete("/pairs/{id}", status_code=204)
+@app.delete("/pair/{id}", status_code=204)
 async def delete_pair(id: int) -> None:
-    pass
-    # return f"Pair with id {id} was deleted"
+    if id <= 0:
+        raise HTTPException(status_code=400, detail="Id must be greater than 0")
+    res = await get_pair(id)
+    if not res:
+        raise HTTPException(status_code=404, detail=f"Item not found by id {id}")
+    # Delete item by ID
+    async with sessionmaker() as session:
+        await session.execute(text("DELETE FROM historical_data WHERE id = :id"), {"id": id})
+        await session.commit()
+
+@app.post("/pair", status_code=201)
+async def create_pair(pair: Pair) -> str:
+    print(f"Creating pair {pair.name}")
+    async with sessionmaker() as session:
+        await session.execute(text("INSERT INTO historical_data (name, date_time, open, high, low, close) VALUES (:name, :date_time, :open, :high, :low, :close)"), 
+                              {"name": pair.name, "date_time": pair.date_time, "open": pair.open, "high": pair.high, "low": pair.low, "close": pair.close})
+        await session.commit()
+    return f"Pair {pair.name} was created"
 
 @app.post("/pairs", status_code=201)
-async def create_pair(pair: Pair) -> str:
-    return f"Pair {pair.name} was created"
+async def create_pairs(pairs: list[Pair]) -> str:
+    async with sessionmaker() as session:
+        for pair in pairs:
+            await session.execute(text("INSERT INTO historical_data (name, date_time, open, high, low, close) VALUES (:name, :date_time, :open, :high, :low, :close)"), 
+                                      {"name": pair.name, "date_time": pair.date_time, "open": pair.open, "high": pair.high, "low": pair.low, "close": pair.close})
+        await session.commit()
+    return f"Pairs were created"
