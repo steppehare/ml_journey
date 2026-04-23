@@ -26,15 +26,12 @@ def engineering(df: DataFrame):
 
     # rsi_14
     diff = df["Close"].diff()
-    
-    # delta = df["Close"].diff()
-    # gain = delta.clip(lower=0)
-    # loss = (-delta).clip(lower=0)
-    # avg_gain = gain.rolling(14).mean()
-    # avg_loss = loss.rolling(14).mean()
-    # rs = avg_gain / avg_loss
-    # df["rsi_14"] = 100 - (100 / (1 + rs))
-    # Кожен рядок тут — операція над цілою колонкою одразу.
+    gain = diff.clip(lower=0)
+    loss = (-diff).clip(lower=0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df["rsi_14"] = 100 - (100 / (1 + rs))
 
     # target
     df["target"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
@@ -44,5 +41,5 @@ def engineering(df: DataFrame):
 
 if __name__ == '__main__':
     df = main()
-    print(df.head)
-    # print(df.shape)
+    print(df.head())
+    print(df.shape)
