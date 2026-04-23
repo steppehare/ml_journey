@@ -10,7 +10,7 @@ def main():
         interval="1d",
         auto_adjust=True
     )
-    hist_data.columns = hist_data.columns.get_level_values(0)  # leave only column headers
+    hist_data.columns = hist_data.columns.get_level_values(0)  # leave only column with headers
     hist_data.to_csv(Path(__file__).parent / "hist_data.csv")
 
 
